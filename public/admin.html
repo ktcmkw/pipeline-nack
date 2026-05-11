@@ -76,6 +76,11 @@
           class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium text-slate-600"
           onclick="switchTab('users')"
         >Users</button>
+        <button
+          id="tab-activity"
+          class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium text-slate-600"
+          onclick="switchTab('activity')"
+        >Activity Log</button>
       </div>
     </div>
 
@@ -224,6 +229,65 @@
           <tbody id="users-tbody">
             <!-- rows injected by JS -->
           </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ACTIVITY LOG TAB ===== -->
+  <div id="tab-content-activity" class="hidden">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-800">Activity Log</h2>
+        <p class="text-xs text-slate-400 mt-0.5">ประวัติการเปลี่ยนแปลงทั้งหมดในระบบ</p>
+      </div>
+      <button
+        onclick="confirmClearActivity()"
+        id="clear-activity-btn"
+        class="flex items-center gap-2 text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"
+        style="min-height:36px"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+        ลบประวัติทั้งหมด
+      </button>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+      <!-- Loading -->
+      <div id="activity-loading" class="flex items-center justify-center py-16 gap-3 text-slate-400">
+        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        <span class="text-sm">กำลังโหลด...</span>
+      </div>
+      <!-- Empty -->
+      <div id="activity-empty" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;margin-bottom:12px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <p class="text-sm font-medium">ยังไม่มีประวัติการทำงาน</p>
+      </div>
+      <!-- Table -->
+      <div id="activity-table-wrap" class="hidden overflow-x-auto">
+        <table class="w-full text-sm" style="table-layout:fixed">
+          <colgroup>
+            <col style="width:18%"><col style="width:28%"><col style="width:22%"><col style="width:16%"><col style="width:16%">
+          </colgroup>
+          <thead>
+            <tr class="border-b border-slate-100">
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500">เวลา</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500">โปรเจกต์</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500">การดำเนินการ</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500">ผู้ดำเนินการ</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500"></th>
+            </tr>
+          </thead>
+          <tbody id="activity-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -393,6 +457,33 @@
   </div>
 </div>
 
+<!-- ===== CLEAR ACTIVITY CONFIRM MODAL ===== -->
+<div id="clear-activity-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onclick="event.stopPropagation()">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="font-semibold text-slate-800 text-base">ลบประวัติทั้งหมด?</h3>
+        <p class="text-sm text-slate-500 mt-0.5">ประวัติทุกรายการจะถูกลบถาวร ไม่สามารถกู้คืนได้</p>
+      </div>
+    </div>
+    <div class="flex gap-3 justify-end mt-2">
+      <button onclick="document.getElementById('clear-activity-modal').classList.add('hidden')"
+        class="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors" style="min-height:40px">
+        ยกเลิก
+      </button>
+      <button onclick="doClearActivity()" id="confirm-clear-btn"
+        class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2" style="min-height:40px">
+        <span id="confirm-clear-label">ลบทั้งหมด</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== TOAST CONTAINER ===== -->
 <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none" style="max-width:320px"></div>
 
@@ -480,7 +571,7 @@ function switchTab(tab) {
   activeTab = tab;
 
   // Update button styles
-  ['projects', 'users'].forEach(t => {
+  ['projects', 'users', 'activity'].forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     const content = document.getElementById(`tab-content-${t}`);
     if (t === tab) {
@@ -492,8 +583,100 @@ function switchTab(tab) {
     }
   });
 
-  if (tab === 'users' && !usersLoaded) {
-    loadUsers();
+  if (tab === 'users' && !usersLoaded) loadUsers();
+  if (tab === 'activity') loadActivity();
+}
+
+// ─── Activity Log ──────────────────────────────────────────────────────────────
+let activityLoaded = false;
+
+async function loadActivity() {
+  setActivityState('loading');
+  try {
+    const res = await fetch('/api/projects/activity', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    activityLoaded = true;
+    if (!rows.length) { setActivityState('empty'); return; }
+    const tbody = document.getElementById('activity-tbody');
+    tbody.innerHTML = rows.map(activityRow).join('');
+    setActivityState('table');
+  } catch (err) {
+    setActivityState('empty');
+    showToast('โหลด Activity Log ไม่สำเร็จ', 'error');
+  }
+}
+
+function activityRow(a) {
+  const actionMap = {
+    status_changed: `<span class="text-blue-700">เปลี่ยน status</span> ${escHtml(a.old_value||'')} → <span class="font-medium">${escHtml(a.new_value||'')}</span>`,
+    created:  `<span class="text-emerald-700">สร้างโปรเจกต์</span>`,
+    updated:  `<span class="text-amber-700">แก้ไขข้อมูล</span>`,
+    deleted:  `<span class="text-red-700">ลบโปรเจกต์</span>`,
+  };
+  const actionHtml = actionMap[a.action] || escHtml(a.action);
+  const dotColor = { status_changed:'bg-blue-500', created:'bg-emerald-500', updated:'bg-amber-500', deleted:'bg-red-500' }[a.action] || 'bg-slate-400';
+  const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('th-TH', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+  return `
+    <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+      <td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">${timeStr}</td>
+      <td class="px-4 py-3 font-medium text-slate-800 truncate">${escHtml(a.project_name || '(ลบแล้ว)')}</td>
+      <td class="px-4 py-3 text-sm">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full ${dotColor} shrink-0"></span>
+          ${actionHtml}
+        </div>
+      </td>
+      <td class="px-4 py-3 text-slate-500 text-sm">${escHtml(a.username || '—')}</td>
+      <td class="px-4 py-3">
+        <button onclick="deleteOneActivity(${a.id})"
+          class="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+          title="ลบรายการนี้">ลบ</button>
+      </td>
+    </tr>`;
+}
+
+function setActivityState(state) {
+  document.getElementById('activity-loading').classList.toggle('hidden', state !== 'loading');
+  document.getElementById('activity-empty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('activity-table-wrap').classList.toggle('hidden', state !== 'table');
+}
+
+function confirmClearActivity() {
+  document.getElementById('clear-activity-modal').classList.remove('hidden');
+}
+
+async function doClearActivity() {
+  const btn = document.getElementById('confirm-clear-btn');
+  const label = document.getElementById('confirm-clear-label');
+  btn.disabled = true;
+  label.innerHTML = `<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> กำลังลบ...`;
+  try {
+    const res = await fetch('/api/activity', { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    document.getElementById('clear-activity-modal').classList.add('hidden');
+    document.getElementById('activity-tbody').innerHTML = '';
+    setActivityState('empty');
+    activityLoaded = false;
+    showToast('ลบประวัติทั้งหมดสำเร็จ', 'success');
+  } catch (err) {
+    showToast('ลบไม่สำเร็จ: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    label.textContent = 'ลบทั้งหมด';
+  }
+}
+
+async function deleteOneActivity(id) {
+  try {
+    const res = await fetch(`/api/activity/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const row = document.querySelector(`#activity-tbody tr td button[onclick="deleteOneActivity(${id})"]`)?.closest('tr');
+    if (row) row.remove();
+    if (!document.getElementById('activity-tbody').children.length) setActivityState('empty');
+    showToast('ลบรายการสำเร็จ', 'success');
+  } catch (err) {
+    showToast('ลบไม่สำเร็จ: ' + err.message, 'error');
   }
 }
 
@@ -529,7 +712,7 @@ function projectRow(p) {
   const pr = PRIORITY[p.priority] || { label: p.priority, color: 'bg-slate-100 text-slate-600' };
   const pct = Math.min(100, Math.max(0, Number(p.progress) || 0));
   const barColor = PROGRESS_COLORS[p.status] || 'bg-blue-500';
-  const dueStr = p.dueDate ? formatDate(p.dueDate) : '—';
+  const dueStr = p.due_date ? formatDate(p.due_date) : '—';
 
   return `
     <tr data-id="${escHtml(String(p._id || p.id))}" class="border-b border-slate-100 last:border-0">
@@ -551,7 +734,7 @@ function projectRow(p) {
       <td class="px-4 py-3">
         <span class="inline-flex items-center text-xs font-medium px-2 py-1 rounded-full ${pr.color}">${pr.label}</span>
       </td>
-      <td class="px-4 py-3 text-slate-600">${escHtml(p.owner || p.ownerName || '—')}</td>
+      <td class="px-4 py-3 text-slate-600">${escHtml(p.owner_name || '—')}</td>
       <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${dueStr}</td>
       <td class="px-4 py-3">
         <div class="flex items-center gap-2">
@@ -609,8 +792,8 @@ function openEditModal(id) {
   document.getElementById('modal-status').value = p.status || 'dev';
   document.getElementById('modal-progress').value = p.progress != null ? p.progress : 0;
   document.getElementById('modal-priority').value = p.priority || 'medium';
-  document.getElementById('modal-owner').value = p.owner || p.ownerName || '';
-  document.getElementById('modal-due').value = p.dueDate ? p.dueDate.substring(0, 10) : '';
+  document.getElementById('modal-owner').value = p.owner_name || '';
+  document.getElementById('modal-due').value = p.due_date ? p.due_date.substring(0, 10) : '';
   document.getElementById('modal-save-label').textContent = 'Save Changes';
   showProjectModal();
 }
@@ -635,7 +818,7 @@ async function saveProject(e) {
     progress:    Number(document.getElementById('modal-progress').value),
     priority:    document.getElementById('modal-priority').value,
     owner:       document.getElementById('modal-owner').value.trim(),
-    dueDate:     document.getElementById('modal-due').value || null,
+    due_date:    document.getElementById('modal-due').value || null,
   };
 
   const spinner = document.getElementById('modal-save-spinner');

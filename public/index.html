@@ -418,7 +418,7 @@ function projectRow(p) {
   const s = STATUS_CONFIG[p.status] || { label: p.status, badge: 'bg-slate-100 text-slate-600 border border-slate-200', bar: '#94a3b8' };
   const pr = PRIORITY_CONFIG[p.priority] || { label: p.priority || '—', dotClass: 'bg-slate-400' };
   const pct = Math.min(100, Math.max(0, Number(p.progress) || 0));
-  const dueStr = p.dueDate ? formatDate(p.dueDate) : '—';
+  const dueStr = p.due_date ? formatDate(p.due_date) : '—';
   const isDelayed = p.status === 'delay';
   const rowBg = isDelayed ? 'bg-red-50/50' : '';
   const pid = escHtml(String(p._id || p.id));
@@ -446,7 +446,7 @@ function projectRow(p) {
           <span class="text-xs text-slate-600">${pr.label}</span>
         </div>
       </td>
-      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${escHtml(p.owner || p.ownerName || '—')}</td>
+      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${escHtml(p.owner_name || '—')}</td>
       <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${dueStr}</td>
     </tr>`;
 }

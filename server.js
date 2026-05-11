@@ -10,6 +10,7 @@ const { requireAuth }  = require('./middleware/requireAuth');
 const authRoutes       = require('./routes/auth');
 const projectRoutes    = require('./routes/projects');
 const userRoutes       = require('./routes/users');
+const activityRoutes   = require('./routes/activity');
 
 const app    = express();
 const server = http.createServer(app);
@@ -46,6 +47,21 @@ app.use(session({
 // Load user from session into req.user on every request
 app.use(loadUser);
 
+// ─── Guard protected HTML pages before static serves them ─────
+// express.static would serve index.html/admin.html without auth otherwise
+app.use((req, res, next) => {
+  if (req.path === '/index.html') {
+    if (!req.user) return res.redirect('/login.html');
+    return next();
+  }
+  if (req.path === '/admin.html') {
+    if (!req.user) return res.redirect('/login.html');
+    if (req.user.role !== 'admin') return res.redirect('/');
+    return next();
+  }
+  next();
+});
+
 // ─── Static files ─────────────────────────────────────────────
 app.use(express.static('public'));
 
@@ -53,6 +69,7 @@ app.use(express.static('public'));
 app.use('/auth',         authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/users',    userRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Root → dashboard (requires auth)
 app.get('/', requireAuth, (req, res) =>

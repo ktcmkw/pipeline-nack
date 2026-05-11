@@ -49,7 +49,7 @@ router.get('/stats', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/projects/activity — recent feed ────────────────
+// ─── GET /api/projects/activity — recent feed (limit 30) ─────
 router.get('/activity', requireAuth, async (req, res) => {
   try {
     const result = await query(`
@@ -57,7 +57,7 @@ router.get('/activity', requireAuth, async (req, res) => {
         FROM activity_log a
         LEFT JOIN projects p ON a.project_id = p.id
        ORDER BY a.created_at DESC
-       LIMIT 30
+       LIMIT 100
     `);
     res.json(result.rows);
   } catch (err) {
