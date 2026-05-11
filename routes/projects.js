@@ -6,8 +6,8 @@ const router = express.Router();
 const VALID_STATUSES   = ['dev', 'qa', 'deploy', 'done', 'delay'];
 const VALID_PRIORITIES = ['high', 'medium', 'low'];
 
-// ─── GET /api/projects — list all (public read after login) ───
-router.get('/', requireAuth, async (req, res) => {
+// ─── GET /api/projects — public read ─────────────────────────
+router.get('/', async (req, res) => {
   try {
     const result = await query(`
       SELECT p.*,
@@ -28,8 +28,8 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/projects/stats — KPI summary ───────────────────
-router.get('/stats', requireAuth, async (req, res) => {
+// ─── GET /api/projects/stats — public ────────────────────────
+router.get('/stats', async (req, res) => {
   try {
     const result = await query(`
       SELECT
@@ -49,8 +49,8 @@ router.get('/stats', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/projects/activity — recent feed (limit 30) ─────
-router.get('/activity', requireAuth, async (req, res) => {
+// ─── GET /api/projects/activity — public ─────────────────────
+router.get('/activity', async (req, res) => {
   try {
     const result = await query(`
       SELECT a.*, p.name AS project_name
@@ -65,8 +65,8 @@ router.get('/activity', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/projects/:id ────────────────────────────────────
-router.get('/:id', requireAuth, async (req, res) => {
+// ─── GET /api/projects/:id — public ──────────────────────────
+router.get('/:id', async (req, res) => {
   try {
     const result = await query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });

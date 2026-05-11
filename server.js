@@ -47,13 +47,8 @@ app.use(session({
 // Load user from session into req.user on every request
 app.use(loadUser);
 
-// ─── Guard protected HTML pages before static serves them ─────
-// express.static would serve index.html/admin.html without auth otherwise
+// ─── Guard admin.html only (dashboard is public) ──────────────
 app.use((req, res, next) => {
-  if (req.path === '/index.html') {
-    if (!req.user) return res.redirect('/login.html');
-    return next();
-  }
   if (req.path === '/admin.html') {
     if (!req.user) return res.redirect('/login.html');
     if (req.user.role !== 'admin') return res.redirect('/');
@@ -71,8 +66,8 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/users',    userRoutes);
 app.use('/api/activity', activityRoutes);
 
-// Root → dashboard (requires auth)
-app.get('/', requireAuth, (req, res) =>
+// Root → dashboard (public — no auth required)
+app.get('/', (req, res) =>
   res.sendFile(__dirname + '/public/index.html')
 );
 
