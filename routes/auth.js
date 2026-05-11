@@ -38,7 +38,13 @@ router.post('/register', async (req, res) => {
     );
 
     req.session.userId = result.rows[0].id;
-    res.status(201).json({ ok: true, user: result.rows[0] });
+    req.session.save((err) => {
+      if (err) {
+        console.error('[auth/register] session save error:', err.message);
+        return res.status(500).json({ error: 'Session error' });
+      }
+      res.status(201).json({ ok: true, user: result.rows[0] });
+    });
   } catch (err) {
     console.error('[auth/register]', err.message);
     res.status(500).json({ error: 'Registration failed' });
@@ -64,14 +70,21 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
 
     req.session.userId = user.id;
-    res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        display_name: user.display_name,
-        role: user.role,
+    // Explicitly save session before sending response (important on Render)
+    req.session.save((err) => {
+      if (err) {
+        console.error('[auth/login] session save error:', err.message);
+        return res.status(500).json({ error: 'Session error' });
       }
+      res.json({
+        ok: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+          role: user.role,
+        }
+      });
     });
   } catch (err) {
     console.error('[auth/login]', err.message);

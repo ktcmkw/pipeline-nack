@@ -18,6 +18,9 @@ const PORT   = process.env.PORT || 3000;
 
 app.set('io', io);
 
+// ─── Trust Render's reverse proxy (CRITICAL for secure cookies) ─
+app.set('trust proxy', 1);
+
 // ─── Middleware ────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -33,7 +36,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production', // HTTPS only on Render
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     sameSite: 'lax',
