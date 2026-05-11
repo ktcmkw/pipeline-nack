@@ -331,18 +331,19 @@ async function loadCurrentUser() {
       window.location.href = '/login.html';
       return;
     }
-    const user = await res.json();
+    const data = await res.json();
+    if (!data.authenticated) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const user = data.user;
 
     // Populate nav
-    document.getElementById('nav-username').textContent = user.displayName || user.username || '—';
+    document.getElementById('nav-username').textContent = user.display_name || user.username || '—';
 
     const avatarEl = document.getElementById('nav-avatar');
-    if (user.avatar) {
-      avatarEl.innerHTML = `<img src="${escHtml(user.avatar)}" alt="avatar" class="w-full h-full object-cover rounded-full" />`;
-    } else {
-      const initials = (user.displayName || user.username || '?').charAt(0).toUpperCase();
-      avatarEl.textContent = initials;
-    }
+    const initials = (user.display_name || user.username || '?').charAt(0).toUpperCase();
+    avatarEl.textContent = initials;
 
     // Show Admin link if admin
     if (user.role === 'admin') {
