@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', requireAdmin, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, username, display_name, avatar_url, email, role, created_at
+      `SELECT id, username, display_name, email, role, created_at
          FROM users ORDER BY created_at DESC`
     );
     res.json(result.rows);

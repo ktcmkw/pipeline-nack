@@ -11,13 +11,15 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const result = await query(`
       SELECT p.*,
-             u.username AS created_by_username,
-             u.avatar_url AS created_by_avatar
+             u.username    AS created_by_username,
+             u.display_name AS created_by_display
         FROM projects p
         LEFT JOIN users u ON p.created_by = u.id
        ORDER BY
-         CASE p.status WHEN 'delay' THEN 0 ELSE 1 END,
-         p.priority DESC,
+         CASE p.status   WHEN 'delay'  THEN 0 ELSE 1 END,
+         CASE p.priority WHEN 'high'   THEN 0
+                         WHEN 'medium' THEN 1
+                         ELSE               2 END,
          p.updated_at DESC
     `);
     res.json(result.rows);
