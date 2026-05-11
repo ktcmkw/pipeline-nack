@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline Executive Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-size: 14px; }
+    * { box-sizing: border-box; }
+
+    /* Progress bar animation */
+    .progress-bar { transition: width 0.5s ease; }
+
+    /* KPI card pulse on update */
+    @keyframes kpiFlash {
+      0%   { background-color: #eff6ff; }
+      100% { background-color: #ffffff; }
+    }
+    .kpi-flash { animation: kpiFlash 0.8s ease forwards; }
+
+    /* Feed item fade-in */
+    @keyframes feedIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .feed-enter { animation: feedIn 0.35s ease forwards; }
+
+    /* Live pulse dot */
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+    .live-dot { animation: livePulse 1.8s ease-in-out infinite; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; }
+
+    /* Table hover */
+    tbody tr:hover { background: #f8fafc; }
+
+    /* Smooth row background transition */
+    tbody tr { transition: background 0.2s; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- ===== TOP NAV ===== -->
+<nav class="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-200">
+  <div class="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-4">
+
+    <!-- Left: Logo + Brand -->
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+        </svg>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">Pipeline Executive</span>
+    </div>
+
+    <!-- Center: LIVE badge -->
+    <div class="flex-1 flex justify-center">
+      <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+        <span class="live-dot w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+        <span class="text-xs font-semibold text-emerald-700 tracking-wide uppercase">Live</span>
+      </div>
+    </div>
+
+    <!-- Right: Clock, User, Admin link, Logout -->
+    <div class="flex items-center gap-3 shrink-0">
+      <!-- Clock -->
+      <span id="nav-clock" class="text-xs font-mono text-slate-500 hidden sm:block">--:--:--</span>
+
+      <!-- User avatar + name -->
+      <div class="flex items-center gap-2">
+        <div id="nav-avatar" class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600 overflow-hidden shrink-0">
+          <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z"/>
+          </svg>
+        </div>
+        <span id="nav-username" class="text-sm font-medium text-slate-700 hidden sm:block">—</span>
+      </div>
+
+      <!-- Admin link (hidden by default, shown for admins) -->
+      <a
+        id="nav-admin-link"
+        href="/admin.html"
+        class="hidden text-sm text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+        style="min-height:36px;display:none;align-items:center"
+      >Admin</a>
+
+      <!-- Logout -->
+      <button
+        onclick="handleLogout()"
+        class="text-sm text-slate-600 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors border border-slate-200"
+        style="min-height:36px"
+      >Logout</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== MAIN ===== -->
+<main class="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- ===== KPI CARDS ===== -->
+  <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+
+    <!-- Total -->
+    <div id="kpi-total" class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+        </svg>
+      </div>
+      <div>
+        <div id="kpi-total-count" class="text-2xl font-bold text-slate-800">—</div>
+        <div class="text-xs text-slate-500 mt-0.5">Total Projects</div>
+      </div>
+    </div>
+
+    <!-- Active -->
+    <div id="kpi-active" class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+        </svg>
+      </div>
+      <div>
+        <div id="kpi-active-count" class="text-2xl font-bold text-blue-700">—</div>
+        <div class="text-xs text-slate-500 mt-0.5">In Progress</div>
+      </div>
+    </div>
+
+    <!-- Completed -->
+    <div id="kpi-completed" class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div>
+        <div id="kpi-completed-count" class="text-2xl font-bold text-emerald-700">—</div>
+        <div class="text-xs text-slate-500 mt-0.5">Completed</div>
+      </div>
+    </div>
+
+    <!-- Delayed -->
+    <div id="kpi-delayed" class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+        </svg>
+      </div>
+      <div>
+        <div id="kpi-delayed-count" class="text-2xl font-bold text-red-700">—</div>
+        <div class="text-xs text-slate-500 mt-0.5">Delayed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN 2-COL GRID ===== -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- LEFT: Pipeline Status Table (spans 2 cols) -->
+    <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-800">Pipeline Status</h2>
+        <span id="table-updated" class="text-xs text-slate-400">Updated just now</span>
+      </div>
+
+      <!-- Loading -->
+      <div id="table-loading" class="flex items-center justify-center py-16 flex-1">
+        <svg class="spinner w-7 h-7 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <span class="ml-2 text-sm text-slate-500">Loading projects…</span>
+      </div>
+
+      <!-- Empty state -->
+      <div id="table-empty" class="hidden flex-1 flex flex-col items-center justify-center py-16 text-slate-400">
+        <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+        </svg>
+        <p class="text-sm font-medium">No projects found</p>
+        <p class="text-xs mt-1 text-slate-400">Projects will appear here once created.</p>
+      </div>
+
+      <!-- Table -->
+      <div id="table-wrap" class="hidden overflow-x-auto flex-1">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50">
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Project Name</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Status</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap w-36">Progress</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Priority</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Owner</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Due Date</th>
+            </tr>
+          </thead>
+          <tbody id="projects-tbody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT: Donut Chart + Activity Feed -->
+    <div class="flex flex-col gap-5">
+
+      <!-- Status Donut Chart -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-slate-800 mb-4">Status Breakdown</h3>
+        <div class="flex flex-col items-center">
+          <div style="position:relative;width:160px;height:160px">
+            <canvas id="donut-chart" width="160" height="160"></canvas>
+            <div id="donut-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+              <div id="donut-total" class="text-xl font-bold text-slate-800">0</div>
+              <div class="text-xs text-slate-400">projects</div>
+            </div>
+          </div>
+          <!-- Custom legend -->
+          <div id="donut-legend" class="mt-4 w-full space-y-1.5">
+            <!-- injected by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Realtime Activity Feed -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1" style="min-height:0">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <h3 class="text-sm font-semibold text-slate-800">Activity Feed</h3>
+          <span class="flex items-center gap-1.5">
+            <span class="live-dot w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+            <span class="text-xs text-slate-400">realtime</span>
+          </span>
+        </div>
+        <div id="feed-loading" class="flex items-center justify-center py-8">
+          <svg class="spinner w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+        <div id="feed-empty" class="hidden flex-1 flex items-center justify-center py-8">
+          <p class="text-xs text-slate-400">No recent activity</p>
+        </div>
+        <ul id="activity-feed" class="hidden divide-y divide-slate-50 overflow-y-auto" style="max-height:300px">
+          <!-- items injected by JS -->
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BOTTOM: Weekly Completions Bar Chart ===== -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold text-slate-800">Weekly Completions</h2>
+      <span class="text-xs text-slate-400">Last 5 weeks</span>
+    </div>
+    <div style="height:180px;position:relative">
+      <canvas id="bar-chart"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== JAVASCRIPT ===== -->
+<script>
+'use strict';
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  dev:    { label: 'Development', badge: 'bg-blue-50 text-blue-700 border border-blue-200',   bar: '#3b82f6', dot: '#3b82f6' },
+  qa:     { label: 'QA',          badge: 'bg-amber-50 text-amber-700 border border-amber-200', bar: '#f59e0b', dot: '#f59e0b' },
+  deploy: { label: 'Deploy',      badge: 'bg-purple-50 text-purple-700 border border-purple-200', bar: '#8b5cf6', dot: '#8b5cf6' },
+  done:   { label: 'Completed',   badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200', bar: '#10b981', dot: '#10b981' },
+  delay:  { label: 'Delayed',     badge: 'bg-red-50 text-red-700 border border-red-200',       bar: '#ef4444', dot: '#ef4444' },
+};
+
+const PRIORITY_CONFIG = {
+  high:   { label: 'High',   dotClass: 'bg-red-500' },
+  medium: { label: 'Medium', dotClass: 'bg-amber-500' },
+  low:    { label: 'Low',    dotClass: 'bg-emerald-500' },
+};
+
+const ACTION_DOT = {
+  status_changed: '#3b82f6',
+  created:        '#10b981',
+  updated:        '#f59e0b',
+  deleted:        '#ef4444',
+};
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let projects = [];
+let donutChart = null;
+let barChart = null;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  startClock();
+  initCharts();
+  await loadCurrentUser();
+  await Promise.all([
+    loadProjects(),
+    loadActivity(),
+  ]);
+  initSocket();
+});
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+function startClock() {
+  const el = document.getElementById('nav-clock');
+  function tick() {
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString('en-GB', { hour12: false });
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/auth/me', { credentials: 'include' });
+    if (!res.ok) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const user = await res.json();
+
+    // Populate nav
+    document.getElementById('nav-username').textContent = user.displayName || user.username || '—';
+
+    const avatarEl = document.getElementById('nav-avatar');
+    if (user.avatar) {
+      avatarEl.innerHTML = `<img src="${escHtml(user.avatar)}" alt="avatar" class="w-full h-full object-cover rounded-full" />`;
+    } else {
+      const initials = (user.displayName || user.username || '?').charAt(0).toUpperCase();
+      avatarEl.textContent = initials;
+    }
+
+    // Show Admin link if admin
+    if (user.role === 'admin') {
+      const adminLink = document.getElementById('nav-admin-link');
+      adminLink.style.display = 'inline-flex';
+      adminLink.classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('Auth check failed', err);
+    window.location.href = '/login.html';
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (_) {}
+  window.location.href = '/login.html';
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+async function loadProjects() {
+  showTableState('loading');
+  try {
+    const res = await fetch('/api/projects', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    projects = Array.isArray(data) ? data : (data.projects || []);
+    renderAll();
+  } catch (err) {
+    console.error('Failed to load projects', err);
+    showTableState('empty');
+  }
+}
+
+function renderAll() {
+  renderTable();
+  updateKpiCards();
+  updateDonutChart();
+  updateBarChart();
+  const el = document.getElementById('table-updated');
+  if (el) el.textContent = 'Updated ' + timeAgo(new Date().toISOString());
+}
+
+function sortedProjects() {
+  const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+  return [...projects].sort((a, b) => {
+    // Delayed first
+    const aDelayed = a.status === 'delay' ? 0 : 1;
+    const bDelayed = b.status === 'delay' ? 0 : 1;
+    if (aDelayed !== bDelayed) return aDelayed - bDelayed;
+    // Then by priority
+    const aPrio = PRIORITY_ORDER[a.priority] ?? 99;
+    const bPrio = PRIORITY_ORDER[b.priority] ?? 99;
+    if (aPrio !== bPrio) return aPrio - bPrio;
+    // Then by updated_at desc
+    return new Date(b.updatedAt || b.updated_at || 0) - new Date(a.updatedAt || a.updated_at || 0);
+  });
+}
+
+function renderTable() {
+  if (projects.length === 0) {
+    showTableState('empty');
+    return;
+  }
+  showTableState('table');
+  const tbody = document.getElementById('projects-tbody');
+  tbody.innerHTML = sortedProjects().map(p => projectRow(p)).join('');
+}
+
+function projectRow(p) {
+  const s = STATUS_CONFIG[p.status] || { label: p.status, badge: 'bg-slate-100 text-slate-600 border border-slate-200', bar: '#94a3b8' };
+  const pr = PRIORITY_CONFIG[p.priority] || { label: p.priority || '—', dotClass: 'bg-slate-400' };
+  const pct = Math.min(100, Math.max(0, Number(p.progress) || 0));
+  const dueStr = p.dueDate ? formatDate(p.dueDate) : '—';
+  const isDelayed = p.status === 'delay';
+  const rowBg = isDelayed ? 'bg-red-50/50' : '';
+  const pid = escHtml(String(p._id || p.id));
+
+  return `
+    <tr data-id="${pid}" class="border-b border-slate-100 last:border-0 ${rowBg}">
+      <td class="px-4 py-3">
+        <div class="font-medium text-slate-800">${escHtml(p.name)}</div>
+        ${p.description ? `<div class="text-xs text-slate-400 mt-0.5 truncate max-w-xs">${escHtml(p.description)}</div>` : ''}
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <span class="inline-flex items-center text-xs font-medium px-2 py-1 rounded-full ${s.badge}">${s.label}</span>
+      </td>
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden" style="min-width:56px">
+            <div class="progress-bar h-2 rounded-full" style="width:${pct}%;background:${s.bar}"></div>
+          </div>
+          <span class="text-xs font-medium text-slate-600 w-8 text-right shrink-0">${pct}%</span>
+        </div>
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full shrink-0 ${pr.dotClass}"></span>
+          <span class="text-xs text-slate-600">${pr.label}</span>
+        </div>
+      </td>
+      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${escHtml(p.owner || p.ownerName || '—')}</td>
+      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${dueStr}</td>
+    </tr>`;
+}
+
+function updateRowInPlace(project) {
+  const id = String(project._id || project.id);
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (row) {
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = projectRow(project);
+    row.replaceWith(tmp.firstElementChild);
+  } else {
+    renderTable();
+  }
+}
+
+function showTableState(state) {
+  document.getElementById('table-loading').classList.toggle('hidden', state !== 'loading');
+  document.getElementById('table-empty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('table-wrap').classList.toggle('hidden', state !== 'table');
+}
+
+// ─── KPI Cards ────────────────────────────────────────────────────────────────
+function updateKpiCards() {
+  const total = projects.length;
+  const completed = projects.filter(p => p.status === 'done').length;
+  const delayed = projects.filter(p => p.status === 'delay').length;
+  const active = projects.filter(p => !['done', 'delay'].includes(p.status)).length;
+
+  setKpi('total', total);
+  setKpi('active', active);
+  setKpi('completed', completed);
+  setKpi('delayed', delayed);
+}
+
+function setKpi(key, value) {
+  const countEl = document.getElementById(`kpi-${key}-count`);
+  const cardEl = document.getElementById(`kpi-${key}`);
+  if (!countEl) return;
+  const prev = countEl.textContent;
+  countEl.textContent = value;
+  if (prev !== '—' && String(prev) !== String(value)) {
+    cardEl.classList.remove('kpi-flash');
+    void cardEl.offsetWidth; // reflow to restart animation
+    cardEl.classList.add('kpi-flash');
+  }
+}
+
+// ─── Charts Init ──────────────────────────────────────────────────────────────
+function initCharts() {
+  // Donut chart
+  const donutCtx = document.getElementById('donut-chart').getContext('2d');
+  donutChart = new Chart(donutCtx, {
+    type: 'doughnut',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        backgroundColor: [],
+        borderWidth: 2,
+        borderColor: '#ffffff',
+        hoverOffset: 4,
+      }],
+    },
+    options: {
+      cutout: '65%',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${ctx.label}: ${ctx.parsed}`,
+          },
+        },
+      },
+      animation: { duration: 400 },
+    },
+  });
+
+  // Bar chart (weekly completions)
+  const barCtx = document.getElementById('bar-chart').getContext('2d');
+  barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: ['Week -4', 'Week -3', 'Week -2', 'Last Week', 'This Week'],
+      datasets: [{
+        label: 'Completions',
+        data: [0, 0, 0, 0, 0],
+        backgroundColor: '#3b82f6',
+        borderRadius: 6,
+        borderSkipped: false,
+        barThickness: 28,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${ctx.parsed.y} completed`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#94a3b8', font: { size: 12 } },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 12 },
+            stepSize: 1,
+            callback: (v) => Number.isInteger(v) ? v : null,
+          },
+          grid: { color: '#f1f5f9' },
+        },
+      },
+      animation: { duration: 400 },
+    },
+  });
+}
+
+function updateDonutChart() {
+  const counts = {};
+  projects.forEach(p => {
+    counts[p.status] = (counts[p.status] || 0) + 1;
+  });
+
+  const keys = Object.keys(STATUS_CONFIG).filter(k => counts[k] > 0);
+  const labels = keys.map(k => STATUS_CONFIG[k].label);
+  const data = keys.map(k => counts[k]);
+  const colors = keys.map(k => STATUS_CONFIG[k].dot);
+
+  donutChart.data.labels = labels;
+  donutChart.data.datasets[0].data = data;
+  donutChart.data.datasets[0].backgroundColor = colors;
+  donutChart.update();
+
+  document.getElementById('donut-total').textContent = projects.length;
+
+  // Custom legend
+  const legendEl = document.getElementById('donut-legend');
+  if (keys.length === 0) {
+    legendEl.innerHTML = '<p class="text-xs text-slate-400 text-center">No data</p>';
+    return;
+  }
+  legendEl.innerHTML = keys.map((k, i) => `
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-3 h-3 rounded-sm shrink-0" style="background:${colors[i]}"></span>
+        <span class="text-xs text-slate-600 truncate">${labels[i]}</span>
+      </div>
+      <span class="text-xs font-semibold text-slate-700 shrink-0">${data[i]}</span>
+    </div>`).join('');
+}
+
+function updateBarChart() {
+  // Mock 5 weeks of data — distribute done projects across weeks
+  const doneProjects = projects.filter(p => p.status === 'done');
+  const total = doneProjects.length;
+
+  // Simple distribution across 5 buckets
+  const weekData = [0, 0, 0, 0, 0];
+  doneProjects.forEach((p, i) => {
+    weekData[i % 5]++;
+  });
+
+  // If we have real updatedAt data, use it for bucketing
+  if (total > 0 && doneProjects.some(p => p.updatedAt || p.updated_at)) {
+    weekData.fill(0);
+    const now = Date.now();
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    doneProjects.forEach(p => {
+      const d = new Date(p.updatedAt || p.updated_at || 0).getTime();
+      const weeksAgo = Math.floor((now - d) / WEEK_MS);
+      if (weeksAgo >= 0 && weeksAgo < 5) {
+        weekData[4 - weeksAgo]++;
+      }
+    });
+  }
+
+  barChart.data.datasets[0].data = weekData;
+  barChart.update();
+}
+
+// ─── Activity Feed ────────────────────────────────────────────────────────────
+async function loadActivity() {
+  try {
+    const res = await fetch('/api/projects/activity', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data.activities || data.activity || []);
+    renderFeed(items.slice(0, 8));
+  } catch (err) {
+    console.error('Failed to load activity', err);
+    showFeedState('empty');
+  }
+}
+
+function renderFeed(items) {
+  if (!items || items.length === 0) {
+    showFeedState('empty');
+    return;
+  }
+  showFeedState('feed');
+  const ul = document.getElementById('activity-feed');
+  ul.innerHTML = items.map(a => feedItem(a)).join('');
+}
+
+function prependFeedItem(activity) {
+  showFeedState('feed');
+  const ul = document.getElementById('activity-feed');
+  const li = document.createElement('li');
+  li.className = 'feed-enter';
+  li.innerHTML = feedItem(activity);
+  ul.insertBefore(li.firstElementChild || li, ul.firstChild);
+
+  // Keep max 8 items
+  while (ul.children.length > 8) {
+    ul.removeChild(ul.lastChild);
+  }
+}
+
+function feedItem(a) {
+  const action = a.action || a.type || 'updated';
+  const dotColor = ACTION_DOT[action] || '#94a3b8';
+  const label = actionLabel(a);
+  const when = timeAgo(a.createdAt || a.timestamp || a.created_at || new Date().toISOString());
+
+  return `
+    <li class="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+      <span class="mt-1.5 w-2 h-2 rounded-full shrink-0" style="background:${dotColor}"></span>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs text-slate-700 leading-relaxed">${escHtml(label)}</p>
+        <p class="text-xs text-slate-400 mt-0.5">${escHtml(when)}</p>
+      </div>
+    </li>`;
+}
+
+function actionLabel(a) {
+  const name = a.project_name || a.projectName || a.name || 'Unknown Project';
+  const user = a.username || a.user || a.performedBy || '';
+  const by = user ? ` by @${user}` : '';
+
+  switch (a.action || a.type) {
+    case 'status_changed': {
+      const newVal = a.new_value || a.newValue || a.to || '';
+      const label = newVal ? (STATUS_CONFIG[newVal] || {}).label || newVal : '';
+      return label
+        ? `${name} moved to ${label}${by}`
+        : `${name} status changed${by}`;
+    }
+    case 'created':
+      return `${name} created${by}`;
+    case 'deleted':
+      return `${name} deleted${by}`;
+    case 'updated':
+    default:
+      return `${name} updated${by}`;
+  }
+}
+
+function showFeedState(state) {
+  document.getElementById('feed-loading').classList.toggle('hidden', state !== 'loading');
+  document.getElementById('feed-empty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('activity-feed').classList.toggle('hidden', state !== 'feed');
+}
+
+// ─── Socket.io ────────────────────────────────────────────────────────────────
+function initSocket() {
+  let socket;
+  try {
+    socket = io({ withCredentials: true });
+  } catch (e) {
+    console.warn('Socket.io not available:', e.message);
+    return;
+  }
+
+  socket.on('connect', () => {
+    console.log('Socket connected:', socket.id);
+  });
+
+  socket.on('project:created', (project) => {
+    const exists = projects.find(p => String(p._id || p.id) === String(project._id || project.id));
+    if (!exists) {
+      projects.push(project);
+      renderTable();
+      updateKpiCards();
+      updateDonutChart();
+      updateBarChart();
+    }
+  });
+
+  socket.on('project:updated', (project) => {
+    const id = String(project._id || project.id);
+    const idx = projects.findIndex(p => String(p._id || p.id) === id);
+    if (idx !== -1) {
+      projects[idx] = project;
+      updateRowInPlace(project);
+      updateKpiCards();
+      updateDonutChart();
+      updateBarChart();
+    }
+  });
+
+  socket.on('project:deleted', (data) => {
+    const id = String(data._id || data.id || data);
+    projects = projects.filter(p => String(p._id || p.id) !== id);
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) row.remove();
+    if (projects.length === 0) showTableState('empty');
+    updateKpiCards();
+    updateDonutChart();
+    updateBarChart();
+  });
+
+  socket.on('activity:new', (activity) => {
+    prependFeedItem(activity);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected');
+  });
+
+  socket.on('connect_error', (err) => {
+    console.warn('Socket connect error:', err.message);
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function formatDate(dateStr) {
+  try {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return String(dateStr);
+  }
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Executive — Login</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    background-color: #F8FAFC;
+    background-image:
+      linear-gradient(rgba(148,163,184,0.15) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,0.15) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  input:focus { outline: none; }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+
+<div class="w-full max-w-sm">
+
+  <!-- Logo -->
+  <div class="flex items-center justify-center gap-3 mb-8">
+    <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+    </div>
+    <div>
+      <p class="font-semibold text-slate-800 text-lg leading-tight">Pipeline Executive</p>
+      <p class="text-xs text-slate-400 leading-tight">Realtime Pipeline Tracking</p>
+    </div>
+  </div>
+
+  <!-- Card -->
+  <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+
+    <!-- Error / Success banners -->
+    <div id="error-banner" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3"></div>
+    <div id="success-banner" class="hidden mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-lg px-4 py-3"></div>
+
+    <!-- Tabs -->
+    <div class="flex bg-slate-100 rounded-lg p-1 mb-6">
+      <button id="tab-login" onclick="switchTab('login')"
+        class="flex-1 text-sm font-medium py-2 rounded-md transition-all bg-white shadow text-slate-800">
+        เข้าสู่ระบบ
+      </button>
+      <button id="tab-register" onclick="switchTab('register')"
+        class="flex-1 text-sm font-medium py-2 rounded-md transition-all text-slate-500">
+        สมัครสมาชิก
+      </button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="login-form" onsubmit="doLogin(event)">
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+        <input type="text" id="login-username" autocomplete="username" required
+          placeholder="กรอก username"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+      </div>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+        <div class="relative">
+          <input type="password" id="login-password" autocomplete="current-password" required
+            placeholder="กรอก password"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors pr-10">
+          <button type="button" onclick="togglePwd('login-password')"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" id="login-btn"
+        class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium py-2.5 rounded-lg text-sm transition-all flex items-center justify-center gap-2 min-h-[44px]">
+        <span id="login-btn-text">เข้าสู่ระบบ</span>
+      </button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="register-form" class="hidden" onsubmit="doRegister(event)">
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Username <span class="text-red-500">*</span></label>
+        <input type="text" id="reg-username" autocomplete="username" required
+          placeholder="ตั้ง username (3–50 ตัวอักษร)"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">ชื่อที่แสดง</label>
+        <input type="text" id="reg-display" autocomplete="name"
+          placeholder="ชื่อ-นามสกุล หรือชื่อเล่น"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+        <input type="email" id="reg-email" autocomplete="email"
+          placeholder="อีเมล (ไม่บังคับ)"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+      </div>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Password <span class="text-red-500">*</span></label>
+        <div class="relative">
+          <input type="password" id="reg-password" autocomplete="new-password" required
+            placeholder="อย่างน้อย 6 ตัวอักษร"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors pr-10">
+          <button type="button" onclick="togglePwd('reg-password')"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" id="reg-btn"
+        class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium py-2.5 rounded-lg text-sm transition-all flex items-center justify-center gap-2 min-h-[44px]">
+        <span id="reg-btn-text">สมัครสมาชิก</span>
+      </button>
+    </form>
+
+  </div>
+
+  <p class="text-center text-xs text-slate-400 mt-6">
+    Powered by Node.js &middot; Neon &middot; Render
+  </p>
+</div>
+
+<script>
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('login-form').classList.toggle('hidden', !isLogin);
+  document.getElementById('register-form').classList.toggle('hidden', isLogin);
+  document.getElementById('tab-login').className =
+    'flex-1 text-sm font-medium py-2 rounded-md transition-all ' +
+    (isLogin ? 'bg-white shadow text-slate-800' : 'text-slate-500');
+  document.getElementById('tab-register').className =
+    'flex-1 text-sm font-medium py-2 rounded-md transition-all ' +
+    (!isLogin ? 'bg-white shadow text-slate-800' : 'text-slate-500');
+  hideMessages();
+}
+
+function togglePwd(inputId) {
+  const input = document.getElementById(inputId);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg; el.classList.remove('hidden');
+  document.getElementById('success-banner').classList.add('hidden');
+}
+function showSuccess(msg) {
+  const el = document.getElementById('success-banner');
+  el.textContent = msg; el.classList.remove('hidden');
+  document.getElementById('error-banner').classList.add('hidden');
+}
+function hideMessages() {
+  document.getElementById('error-banner').classList.add('hidden');
+  document.getElementById('success-banner').classList.add('hidden');
+}
+
+function setLoading(btnId, textId, loading, label) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = loading;
+  document.getElementById(textId).innerHTML = loading
+    ? `<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> ${loading ? 'กำลังดำเนินการ...' : label}`
+    : label;
+}
+
+async function doLogin(e) {
+  e.preventDefault();
+  hideMessages();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  setLoading('login-btn', 'login-btn-text', true, 'เข้าสู่ระบบ');
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) return showError(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
+    window.location.href = data.user.role === 'admin' ? '/admin.html' : '/';
+  } catch {
+    showError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+  } finally {
+    setLoading('login-btn', 'login-btn-text', false, 'เข้าสู่ระบบ');
+  }
+}
+
+async function doRegister(e) {
+  e.preventDefault();
+  hideMessages();
+  const body = {
+    username:     document.getElementById('reg-username').value.trim(),
+    display_name: document.getElementById('reg-display').value.trim(),
+    email:        document.getElementById('reg-email').value.trim(),
+    password:     document.getElementById('reg-password').value,
+  };
+  setLoading('reg-btn', 'reg-btn-text', true, 'สมัครสมาชิก');
+  try {
+    const res = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) return showError(data.error || 'สมัครไม่สำเร็จ');
+    window.location.href = data.user.role === 'admin' ? '/admin.html' : '/';
+  } catch {
+    showError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+  } finally {
+    setLoading('reg-btn', 'reg-btn-text', false, 'สมัครสมาชิก');
+  }
+}
+</script>
+</body>
+</html>

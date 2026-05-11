@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel — Pipeline Executive Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-size: 14px; }
+    * { box-sizing: border-box; }
+
+    /* Progress bar animation */
+    .progress-bar { transition: width 0.4s ease; }
+
+    /* Toast slide-in */
+    @keyframes slideInRight {
+      from { transform: translateX(110%); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    .toast-enter { animation: slideInRight 0.3s ease forwards; }
+    .toast-exit  { animation: fadeOut 0.4s ease forwards; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; }
+
+    /* Tab active */
+    .tab-btn.active {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-bottom: 2px solid #1d4ed8;
+    }
+    .tab-btn {
+      transition: background 0.15s, color 0.15s;
+    }
+
+    /* Table hover */
+    tbody tr:hover { background: #f8fafc; }
+
+    /* Modal open: prevent body scroll */
+    body.modal-open { overflow: hidden; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- ===== TOP NAV ===== -->
+<nav class="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-200">
+  <div class="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-4">
+
+    <!-- Left: Logo -->
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+        </svg>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">Pipeline Admin</span>
+    </div>
+
+    <!-- Middle: Tab Buttons -->
+    <div class="flex-1 flex justify-center">
+      <div class="flex gap-1">
+        <button
+          id="tab-projects"
+          class="tab-btn active px-4 py-1.5 rounded-lg text-sm font-medium text-slate-600"
+          onclick="switchTab('projects')"
+        >Projects</button>
+        <button
+          id="tab-users"
+          class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium text-slate-600"
+          onclick="switchTab('users')"
+        >Users</button>
+      </div>
+    </div>
+
+    <!-- Right: User info + links -->
+    <div class="flex items-center gap-3 shrink-0">
+      <div id="nav-user" class="flex items-center gap-2">
+        <div id="nav-avatar" class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600 overflow-hidden">
+          <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z"/>
+          </svg>
+        </div>
+        <span id="nav-username" class="text-sm font-medium text-slate-700">—</span>
+      </div>
+      <a href="/" class="text-sm text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+        View Dashboard
+      </a>
+      <button
+        onclick="handleLogout()"
+        class="text-sm text-slate-600 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors border border-slate-200"
+        style="min-height:36px"
+      >
+        Logout
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="max-w-screen-xl mx-auto px-4 py-6">
+
+  <!-- ===== PROJECTS TAB ===== -->
+  <div id="tab-content-projects">
+
+    <!-- Header row -->
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold text-slate-800">Pipeline Projects</h2>
+      <button
+        onclick="openAddModal()"
+        class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        style="min-height:40px"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+        </svg>
+        Add Project
+      </button>
+    </div>
+
+    <!-- Summary chips -->
+    <div class="flex flex-wrap gap-3 mb-5" id="summary-chips">
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+        <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</span>
+        <span id="chip-total" class="text-lg font-bold text-slate-800">—</span>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+        <span class="text-xs font-medium text-blue-500 uppercase tracking-wide">Active</span>
+        <span id="chip-active" class="text-lg font-bold text-blue-700">—</span>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+        <span class="text-xs font-medium text-emerald-500 uppercase tracking-wide">Completed</span>
+        <span id="chip-completed" class="text-lg font-bold text-emerald-700">—</span>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+        <span class="text-xs font-medium text-red-500 uppercase tracking-wide">Delayed</span>
+        <span id="chip-delayed" class="text-lg font-bold text-red-700">—</span>
+      </div>
+    </div>
+
+    <!-- Projects Table Card -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- Loading overlay -->
+      <div id="projects-loading" class="flex items-center justify-center py-16">
+        <svg class="spinner w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <span class="ml-3 text-sm text-slate-500">Loading projects…</span>
+      </div>
+
+      <!-- Empty state -->
+      <div id="projects-empty" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
+        <svg class="w-12 h-12 mb-3 opacity-50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+        </svg>
+        <p class="text-sm font-medium">No projects found</p>
+        <p class="text-xs mt-1">Click "Add Project" to create your first project.</p>
+      </div>
+
+      <!-- Table -->
+      <div id="projects-table-wrap" class="hidden overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50">
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Name</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Status</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap w-40">Progress</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Priority</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Owner</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Due Date</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="projects-tbody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== USERS TAB ===== -->
+  <div id="tab-content-users" class="hidden">
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold text-slate-800">User Management</h2>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- Loading -->
+      <div id="users-loading" class="flex items-center justify-center py-16">
+        <svg class="spinner w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <span class="ml-3 text-sm text-slate-500">Loading users…</span>
+      </div>
+
+      <!-- Empty -->
+      <div id="users-empty" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
+        <p class="text-sm font-medium">No users found</p>
+      </div>
+
+      <!-- Table -->
+      <div id="users-table-wrap" class="hidden overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50">
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Avatar</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Username</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Display Name</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Role</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Joined</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== ADD/EDIT PROJECT MODAL ===== -->
+<div id="project-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-title" class="text-lg font-bold text-slate-800">Add Project</h3>
+      <button onclick="closeProjectModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="project-form" onsubmit="saveProject(event)" class="flex flex-col gap-4">
+      <input type="hidden" id="modal-project-id" value="" />
+
+      <!-- Name -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Project Name <span class="text-red-500">*</span></label>
+        <input
+          type="text"
+          id="modal-name"
+          required
+          placeholder="Enter project name"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
+        <textarea
+          id="modal-description"
+          rows="3"
+          placeholder="Optional project description"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+        ></textarea>
+      </div>
+
+      <!-- Status + Progress row -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Status</label>
+          <select
+            id="modal-status"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          >
+            <option value="dev">Development</option>
+            <option value="qa">QA</option>
+            <option value="deploy">Deploy</option>
+            <option value="done">Completed</option>
+            <option value="delay">Delayed</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Progress (0–100)</label>
+          <input
+            type="number"
+            id="modal-progress"
+            min="0" max="100" value="0"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      <!-- Priority + Owner row -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Priority</label>
+          <select
+            id="modal-priority"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Owner Name</label>
+          <input
+            type="text"
+            id="modal-owner"
+            placeholder="Owner display name"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      <!-- Due Date -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Due Date</label>
+        <input
+          type="date"
+          id="modal-due"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onclick="closeProjectModal()"
+          class="px-5 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          style="min-height:40px"
+        >Cancel</button>
+        <button
+          type="submit"
+          id="modal-save-btn"
+          class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium flex items-center gap-2 transition-colors"
+          style="min-height:40px"
+        >
+          <svg id="modal-save-spinner" class="spinner w-4 h-4 hidden" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <span id="modal-save-label">Save</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== DELETE CONFIRM MODAL ===== -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onclick="event.stopPropagation()">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-800 text-base">Delete Project</h3>
+        <p class="text-xs text-slate-500 mt-0.5">This action cannot be undone.</p>
+      </div>
+    </div>
+    <p class="text-sm text-slate-600 mb-5">
+      Are you sure you want to delete <span id="delete-project-name" class="font-semibold text-slate-800">"…"</span>?
+    </p>
+    <div class="flex justify-end gap-3">
+      <button
+        onclick="closeDeleteModal()"
+        class="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+        style="min-height:40px"
+      >Cancel</button>
+      <button
+        onclick="confirmDelete()"
+        id="delete-confirm-btn"
+        class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium flex items-center gap-2 transition-colors"
+        style="min-height:40px"
+      >
+        <svg id="delete-spinner" class="spinner w-4 h-4 hidden" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none" style="max-width:320px"></div>
+
+<!-- ===== JAVASCRIPT ===== -->
+<script>
+'use strict';
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+const STATUS = {
+  dev:    { label: 'Development', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  qa:     { label: 'QA',          color: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  deploy: { label: 'Deploy',      color: 'bg-purple-50 text-purple-700 border border-purple-200' },
+  done:   { label: 'Completed',   color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  delay:  { label: 'Delayed',     color: 'bg-red-50 text-red-700 border border-red-200' },
+};
+const PRIORITY = {
+  high:   { label: 'High',   color: 'bg-red-50 text-red-700' },
+  medium: { label: 'Medium', color: 'bg-amber-50 text-amber-700' },
+  low:    { label: 'Low',    color: 'bg-emerald-50 text-emerald-700' },
+};
+const PROGRESS_COLORS = {
+  done:  'bg-emerald-500',
+  delay: 'bg-red-500',
+  dev:   'bg-blue-500',
+  qa:    'bg-amber-500',
+  deploy:'bg-purple-500',
+};
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let projects = [];       // array of project objects
+let currentUser = null;  // /auth/me response
+let usersLoaded = false; // lazy flag
+let deleteTargetId = null;
+let activeTab = 'projects';
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  await loadProjects();
+  initSocket();
+});
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/auth/me', { credentials: 'include' });
+    if (!res.ok) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const user = await res.json();
+    currentUser = user;
+
+    if (user.role !== 'admin') {
+      window.location.href = '/';
+      return;
+    }
+
+    // Populate nav
+    document.getElementById('nav-username').textContent = user.displayName || user.username || '—';
+
+    const avatarEl = document.getElementById('nav-avatar');
+    if (user.avatar) {
+      avatarEl.innerHTML = `<img src="${escHtml(user.avatar)}" alt="avatar" class="w-full h-full object-cover rounded-full" />`;
+    } else {
+      const initials = (user.displayName || user.username || '?').charAt(0).toUpperCase();
+      avatarEl.textContent = initials;
+    }
+  } catch (err) {
+    console.error('Auth check failed', err);
+    window.location.href = '/login.html';
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (_) {}
+  window.location.href = '/login.html';
+}
+
+// ─── Tab Switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+
+  // Update button styles
+  ['projects', 'users'].forEach(t => {
+    const btn = document.getElementById(`tab-${t}`);
+    const content = document.getElementById(`tab-content-${t}`);
+    if (t === tab) {
+      btn.classList.add('active');
+      content.classList.remove('hidden');
+    } else {
+      btn.classList.remove('active');
+      content.classList.add('hidden');
+    }
+  });
+
+  if (tab === 'users' && !usersLoaded) {
+    loadUsers();
+  }
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+async function loadProjects() {
+  showProjectsState('loading');
+  try {
+    const res = await fetch('/api/projects', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    projects = Array.isArray(data) ? data : (data.projects || []);
+    renderProjectsTable();
+    updateSummaryChips();
+  } catch (err) {
+    console.error('Failed to load projects', err);
+    showToast('Failed to load projects: ' + err.message, 'error');
+    showProjectsState('empty');
+  }
+}
+
+function renderProjectsTable() {
+  const tbody = document.getElementById('projects-tbody');
+  if (projects.length === 0) {
+    showProjectsState('empty');
+    return;
+  }
+  showProjectsState('table');
+  tbody.innerHTML = projects.map(p => projectRow(p)).join('');
+}
+
+function projectRow(p) {
+  const s = STATUS[p.status] || { label: p.status, color: 'bg-slate-100 text-slate-600 border border-slate-200' };
+  const pr = PRIORITY[p.priority] || { label: p.priority, color: 'bg-slate-100 text-slate-600' };
+  const pct = Math.min(100, Math.max(0, Number(p.progress) || 0));
+  const barColor = PROGRESS_COLORS[p.status] || 'bg-blue-500';
+  const dueStr = p.dueDate ? formatDate(p.dueDate) : '—';
+
+  return `
+    <tr data-id="${escHtml(String(p._id || p.id))}" class="border-b border-slate-100 last:border-0">
+      <td class="px-4 py-3">
+        <div class="font-medium text-slate-800">${escHtml(p.name)}</div>
+        ${p.description ? `<div class="text-xs text-slate-400 mt-0.5 truncate max-w-xs">${escHtml(p.description)}</div>` : ''}
+      </td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center text-xs font-medium px-2 py-1 rounded-full ${s.color}">${s.label}</span>
+      </td>
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden" style="min-width:60px">
+            <div class="progress-bar h-2 rounded-full ${barColor}" style="width:${pct}%"></div>
+          </div>
+          <span class="text-xs font-medium text-slate-600 w-8 text-right">${pct}%</span>
+        </div>
+      </td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center text-xs font-medium px-2 py-1 rounded-full ${pr.color}">${pr.label}</span>
+      </td>
+      <td class="px-4 py-3 text-slate-600">${escHtml(p.owner || p.ownerName || '—')}</td>
+      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${dueStr}</td>
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <button
+            onclick="openEditModal('${escHtml(String(p._id || p.id))}')"
+            class="text-xs font-medium text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
+            style="min-height:32px"
+          >Edit</button>
+          <button
+            onclick="openDeleteModal('${escHtml(String(p._id || p.id))}', '${escHtml(p.name).replace(/'/g, "&#39;")}')"
+            class="text-xs font-medium text-red-600 hover:text-red-700 px-2.5 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+            style="min-height:32px"
+          >Delete</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function updateSummaryChips() {
+  const total = projects.length;
+  const completed = projects.filter(p => p.status === 'done').length;
+  const delayed = projects.filter(p => p.status === 'delay').length;
+  const active = projects.filter(p => !['done', 'delay'].includes(p.status)).length;
+
+  document.getElementById('chip-total').textContent = total;
+  document.getElementById('chip-active').textContent = active;
+  document.getElementById('chip-completed').textContent = completed;
+  document.getElementById('chip-delayed').textContent = delayed;
+}
+
+function showProjectsState(state) {
+  document.getElementById('projects-loading').classList.toggle('hidden', state !== 'loading');
+  document.getElementById('projects-empty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('projects-table-wrap').classList.toggle('hidden', state !== 'table');
+}
+
+// ─── Add / Edit Modal ─────────────────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('modal-title').textContent = 'Add Project';
+  document.getElementById('modal-project-id').value = '';
+  document.getElementById('modal-save-label').textContent = 'Save';
+  document.getElementById('project-form').reset();
+  document.getElementById('modal-progress').value = '0';
+  showProjectModal();
+}
+
+function openEditModal(id) {
+  const p = projects.find(x => String(x._id || x.id) === id);
+  if (!p) return;
+
+  document.getElementById('modal-title').textContent = 'Edit Project';
+  document.getElementById('modal-project-id').value = id;
+  document.getElementById('modal-name').value = p.name || '';
+  document.getElementById('modal-description').value = p.description || '';
+  document.getElementById('modal-status').value = p.status || 'dev';
+  document.getElementById('modal-progress').value = p.progress != null ? p.progress : 0;
+  document.getElementById('modal-priority').value = p.priority || 'medium';
+  document.getElementById('modal-owner').value = p.owner || p.ownerName || '';
+  document.getElementById('modal-due').value = p.dueDate ? p.dueDate.substring(0, 10) : '';
+  document.getElementById('modal-save-label').textContent = 'Save Changes';
+  showProjectModal();
+}
+
+function showProjectModal() {
+  document.getElementById('project-modal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+function closeProjectModal() {
+  document.getElementById('project-modal').classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+
+async function saveProject(e) {
+  e.preventDefault();
+  const id = document.getElementById('modal-project-id').value;
+  const payload = {
+    name:        document.getElementById('modal-name').value.trim(),
+    description: document.getElementById('modal-description').value.trim(),
+    status:      document.getElementById('modal-status').value,
+    progress:    Number(document.getElementById('modal-progress').value),
+    priority:    document.getElementById('modal-priority').value,
+    owner:       document.getElementById('modal-owner').value.trim(),
+    dueDate:     document.getElementById('modal-due').value || null,
+  };
+
+  const spinner = document.getElementById('modal-save-spinner');
+  const btn = document.getElementById('modal-save-btn');
+  spinner.classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    const isEdit = Boolean(id);
+    const url = isEdit ? `/api/projects/${id}` : '/api/projects';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const saved = await res.json();
+    const project = saved.project || saved;
+
+    if (isEdit) {
+      const idx = projects.findIndex(x => String(x._id || x.id) === id);
+      if (idx !== -1) projects[idx] = project;
+    } else {
+      projects.push(project);
+    }
+
+    renderProjectsTable();
+    updateSummaryChips();
+    closeProjectModal();
+    showToast(isEdit ? 'Project updated.' : 'Project created.', 'success');
+  } catch (err) {
+    showToast('Save failed: ' + err.message, 'error');
+  } finally {
+    spinner.classList.add('hidden');
+    btn.disabled = false;
+  }
+}
+
+// ─── Delete Modal ─────────────────────────────────────────────────────────────
+function openDeleteModal(id, name) {
+  deleteTargetId = id;
+  document.getElementById('delete-project-name').textContent = `"${name}"`;
+  document.getElementById('delete-modal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+function closeDeleteModal() {
+  deleteTargetId = null;
+  document.getElementById('delete-modal').classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+
+async function confirmDelete() {
+  if (!deleteTargetId) return;
+  const id = deleteTargetId;
+  const spinner = document.getElementById('delete-spinner');
+  const btn = document.getElementById('delete-confirm-btn');
+  spinner.classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    projects = projects.filter(p => String(p._id || p.id) !== id);
+    renderProjectsTable();
+    updateSummaryChips();
+    closeDeleteModal();
+    showToast('Project deleted.', 'success');
+  } catch (err) {
+    showToast('Delete failed: ' + err.message, 'error');
+  } finally {
+    spinner.classList.add('hidden');
+    btn.disabled = false;
+  }
+}
+
+// ─── Users Tab ────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  usersLoaded = true;
+  showUsersState('loading');
+  try {
+    const res = await fetch('/api/users', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const users = Array.isArray(data) ? data : (data.users || []);
+    renderUsersTable(users);
+  } catch (err) {
+    console.error('Failed to load users', err);
+    showToast('Failed to load users: ' + err.message, 'error');
+    showUsersState('empty');
+  }
+}
+
+function renderUsersTable(users) {
+  if (users.length === 0) {
+    showUsersState('empty');
+    return;
+  }
+  showUsersState('table');
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = users.map(u => userRow(u)).join('');
+}
+
+function userRow(u) {
+  const uid = String(u._id || u.id);
+  const isSelf = currentUser && String(currentUser._id || currentUser.id) === uid;
+  const roleBadge = u.role === 'admin'
+    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+    : 'bg-slate-100 text-slate-600 border border-slate-200';
+  const roleLabel = u.role === 'admin' ? 'Admin' : 'Viewer';
+  const joinedStr = u.createdAt ? formatDate(u.createdAt) : '—';
+
+  let avatarHtml;
+  if (u.avatar) {
+    avatarHtml = `<img src="${escHtml(u.avatar)}" alt="avatar" class="w-8 h-8 rounded-full object-cover" />`;
+  } else {
+    const initial = (u.displayName || u.username || '?').charAt(0).toUpperCase();
+    avatarHtml = `<div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600">${initial}</div>`;
+  }
+
+  const toggleBtn = isSelf ? '' : `
+    <button
+      onclick="toggleUserRole('${uid}', '${escHtml(u.role)}')"
+      class="text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${u.role === 'admin' ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : 'text-blue-600 border-blue-200 hover:bg-blue-50'}"
+      style="min-height:32px"
+    >${u.role === 'admin' ? 'Make Viewer' : 'Make Admin'}</button>`;
+
+  return `
+    <tr data-uid="${uid}" class="border-b border-slate-100 last:border-0">
+      <td class="px-4 py-3">${avatarHtml}</td>
+      <td class="px-4 py-3 font-medium text-slate-800">${escHtml(u.username || '—')}</td>
+      <td class="px-4 py-3 text-slate-600">${escHtml(u.displayName || '—')}</td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center text-xs font-medium px-2 py-1 rounded-full ${roleBadge}">${roleLabel}</span>
+      </td>
+      <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${joinedStr}</td>
+      <td class="px-4 py-3">
+        ${toggleBtn}
+        ${isSelf ? '<span class="text-xs text-slate-400 italic">You</span>' : ''}
+      </td>
+    </tr>`;
+}
+
+async function toggleUserRole(uid, currentRole) {
+  const newRole = currentRole === 'admin' ? 'viewer' : 'admin';
+  try {
+    const res = await fetch(`/api/users/${uid}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Reload users to reflect change
+    usersLoaded = false;
+    await loadUsers();
+    showToast(`User role updated to ${newRole}.`, 'success');
+  } catch (err) {
+    showToast('Role update failed: ' + err.message, 'error');
+  }
+}
+
+function showUsersState(state) {
+  document.getElementById('users-loading').classList.toggle('hidden', state !== 'loading');
+  document.getElementById('users-empty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('users-table-wrap').classList.toggle('hidden', state !== 'table');
+}
+
+// ─── Socket.io ────────────────────────────────────────────────────────────────
+function initSocket() {
+  let socket;
+  try {
+    socket = io({ withCredentials: true });
+  } catch (e) {
+    console.warn('Socket.io not available:', e.message);
+    return;
+  }
+
+  socket.on('connect', () => {
+    console.log('Socket connected:', socket.id);
+  });
+
+  socket.on('project:created', (project) => {
+    const exists = projects.find(p => String(p._id || p.id) === String(project._id || project.id));
+    if (!exists) {
+      projects.push(project);
+      renderProjectsTable();
+      updateSummaryChips();
+      showToast(`New project: "${project.name}"`, 'info');
+    }
+  });
+
+  socket.on('project:updated', (project) => {
+    const id = String(project._id || project.id);
+    const idx = projects.findIndex(p => String(p._id || p.id) === id);
+    if (idx !== -1) {
+      projects[idx] = project;
+      // Update row in place without full re-render
+      const row = document.querySelector(`tr[data-id="${id}"]`);
+      if (row) {
+        const tmp = document.createElement('tbody');
+        tmp.innerHTML = projectRow(project);
+        row.replaceWith(tmp.firstElementChild);
+      } else {
+        renderProjectsTable();
+      }
+      updateSummaryChips();
+    }
+  });
+
+  socket.on('project:deleted', (data) => {
+    const id = String(data._id || data.id || data);
+    projects = projects.filter(p => String(p._id || p.id) !== id);
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) row.remove();
+    if (projects.length === 0) showProjectsState('empty');
+    updateSummaryChips();
+  });
+
+  socket.on('activity:new', (activity) => {
+    const msg = activity.message || activity.text || 'New activity';
+    showToast(msg, 'info');
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected');
+  });
+
+  socket.on('connect_error', (err) => {
+    console.warn('Socket connect error:', err.message);
+  });
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+
+  const colors = {
+    success: 'bg-emerald-600',
+    error:   'bg-red-600',
+    info:    'bg-slate-700',
+    warning: 'bg-amber-500',
+  };
+  const icons = {
+    success: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
+    error:   `<path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
+    info:    `<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
+    warning: `<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/>`,
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `pointer-events-auto toast-enter flex items-center gap-2 px-4 py-3 rounded-xl text-white text-sm font-medium shadow-lg ${colors[type] || colors.info}`;
+  toast.innerHTML = `
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      ${icons[type] || icons.info}
+    </svg>
+    <span class="flex-1">${escHtml(message)}</span>
+    <button onclick="this.parentElement.remove()" class="ml-1 opacity-70 hover:opacity-100 transition-opacity">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>`;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.remove('toast-enter');
+    toast.classList.add('toast-exit');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  }, 3000);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatDate(dateStr) {
+  try {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric'
+    });
+  } catch {
+    return String(dateStr);
+  }
+}
+
+// Close modals on backdrop click
+document.getElementById('project-modal').addEventListener('click', closeProjectModal);
+document.getElementById('delete-modal').addEventListener('click', closeDeleteModal);
+
+// Close modals on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeProjectModal();
+    closeDeleteModal();
+  }
+});
+</script>
+</body>
+</html>
